@@ -1,0 +1,19 @@
+<routes>
+
+    <vType id="def" accel="0.8" decel="4.5" sigma="0.5" length="5" minGap="2.5" maxSpeed="16.67" guiShape="passenger" />
+    <vType id="con" accel="0.8" decel="4.5" sigma="0.5" length="5" minGap="2.5" maxSpeed="16.67" guiShape="passenger" />
+
+    <route id="-gneE0gneE1" edges="-gneE0 gneE1" />
+    <route id="-gneE0gneE2" edges="-gneE0 gneE2" />
+    <route id="-gneE0gneE3" edges="-gneE0 gneE3" />
+    <route id="-gneE1gneE0" edges="-gneE1 gneE0" />
+    <route id="-gneE1gneE2" edges="-gneE1 gneE2" />
+    <route id="-gneE1gneE3" edges="-gneE1 gneE3" />
+    <route id="-gneE2gneE0" edges="-gneE2 gneE0" />
+    <route id="-gneE2gneE1" edges="-gneE2 gneE1" />
+    <route id="-gneE2gneE3" edges="-gneE2 gneE3" />
+    <route id="-gneE3gneE0" edges="-gneE3 gneE0" />
+    <route id="-gneE3gneE1" edges="-gneE3 gneE1" />
+    <route id="-gneE3gneE2" edges="-gneE3 gneE2" />
+
+</routes>
