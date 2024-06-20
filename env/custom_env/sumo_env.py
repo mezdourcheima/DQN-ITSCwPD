@@ -10,6 +10,8 @@ import random
 import os
 import numpy as np
 from itertools import permutations
+import itertools
+
 
 SUMO_HOME = "/opt/homebrew/"
 
@@ -141,6 +143,7 @@ class SumoEnv:
         traci.simulationStep()
 
     def reset(self):
+        
         raise NotImplementedError
 
     def step(self, action):
@@ -383,10 +386,8 @@ class SumoEnv:
     # rou & flow logic
 
     def is_valid_connection(self, on, dn):
-        # Add your custom logic here to determine if a connection is valid
-        # For example, you can check if nodes are in a specific region, have certain attributes, etc.
-        # This is a placeholder implementation:
-        valid_edges = ['E1', 'E2', 'E3']  # Replace with your actual valid edges
+        # Use all the edges from the network
+        valid_edges = ['E0', 'E6', 'E7', 'E8', 'E9', 'E10', 'E11', 'E12', 'E13', 'E14', 'E15', 'E16', 'E17']
         return any(edge.getID() in valid_edges for edge in self.net.getNode(on).getOutgoing())
 
     def gen_route_net(self):
@@ -395,12 +396,15 @@ class SumoEnv:
 
         route_net = {}
         route_id = 0
-        for (on, dn) in permutations(non_tl_nodes, 2):
+        for (on, dn) in itertools.permutations(non_tl_nodes, 2):
             if not self.is_valid_connection(on, dn):
                 continue
 
             outgoing_edges = self.net.getNode(on).getOutgoing()
             incoming_edges = self.net.getNode(dn).getIncoming()
+
+            print(f"Node {on} outgoing edges: {[edge.getID() for edge in outgoing_edges]}")
+            print(f"Node {dn} incoming edges: {[edge.getID() for edge in incoming_edges]}")
 
             if not outgoing_edges or not incoming_edges:
                 continue
@@ -411,6 +415,7 @@ class SumoEnv:
                 route_net[route_id] = route_edges
                 route_id += 1
 
+        print("Generated route_net:", route_net)  # Debug statement
         return route_net
 
 
@@ -419,6 +424,10 @@ class SumoEnv:
         flow = {}
 
         for rou in self.route_net:
+            if len(self.route_net[rou]) < 2:
+                print(f"Invalid route in route_net[{rou}]:", self.route_net[rou])  # Debug statement
+                continue  # Skip invalid routes
+
             if self.route_net[rou][0] not in flow:
                 flow[self.route_net[rou][0]] = {"out": {}, "con": 0, "lam": 0., "pro": 0., "veh": 0}
             if self.route_net[rou][1] not in flow[self.route_net[rou][0]]["out"]:
@@ -433,14 +442,17 @@ class SumoEnv:
             if e in con:
                 con[e].append([c.getToLane().getEdge().getID() for c in self.net.getLane(l).getOutgoing()])
 
-        for e in con:
-            c = [item for sublist in con[e] for item in sublist]
-            c = dict(list(set([(o, c.count(o)) for o in c])))
-            for o in sorted([o for o in c]):
-                flow[e]["out"][o]["con"] = c[o]
-                flow[e]["con"] += c[o]
+        for e in flow:
+            flow[e]["con"] = len(con[e])
+            for o in flow[e]["out"]:
+                flow[e]["out"][o]["con"] = len(flow[e]["out"][o]["rou"])
+
+        print(f"Flow logic connections: {con}")
+        print(f"Flow logic after connections: {flow}")
 
         return flow
+
+
 
     def set_seed(self):
         if self.args["seed"]:
@@ -464,19 +476,31 @@ class SumoEnv:
         return lambdas if self.rnd[1] else [self.lambda_veh_p_hour(f) for f in self.args["veh_p_hour"]]
 
     def update_flow_logic(self):
+        for e in self.flow_logic:
+            v = self.flow_logic[e]["veh"]
+            #print(f"flow_logic[e]['veh'] : v:{v}")
+            if v == 0:
+                print(f"Warning: Division by zero avoided for edge {e}")
+                self.flow_logic[e]["pro"] = 0  # or some other default value
+            else:
+                self.flow_logic[e]["pro"] = self.flow_logic[e]["veh"] / v
+                #print(f"flow_logic[e]['pro'] : {self.flow_logic[e]['pro']}")
+
         self.set_seed()
 
         self.flow = []
         self.con_p_rate = self.con_penetration_rate()
+        #print(f"self.con_p_rate : {self.con_p_rate}")
 
-        """"""
         lambdas = self.insert_lambdas()
+        #print(f"lambdas : {lambdas}")
         self.veh_n_p_hour = [3600 / l for l in lambdas]
+        #print(f"self.veh_n_p_hour : {self.veh_n_p_hour}")
         print("\n--- con:", self.con_p_rate, ", flow:", self.veh_n_p_hour, "---\n")
-        """"""
 
         for i, e in enumerate(sorted([e for e in self.flow_logic])):
             self.flow_logic[e]["lam"] = lambdas[i]
+            #print(f"Generated flow[e][lam]: {self.flow_logic[e]['lam']}")
 
             t, fi = 0, []
             while t < self.args["steps"]:
@@ -484,31 +508,50 @@ class SumoEnv:
                 t += np.random.poisson(self.flow_logic[e]["lam"])
 
             self.flow_logic[e]["veh"] = len(fi)
+            #print(f"flow_logic[e]['veh'] : {self.flow_logic[e]['veh']}")
             random.shuffle(fi)
 
             k = sorted([0., 1.] + [random.uniform(0, 1) for _ in range(self.flow_logic[e]["con"] - 1)])
             p = [a - b for a, b in zip(k[1:], k[:-1])]
+            #print(f"p (before adjustments): {p}")
 
             for o in self.flow_logic[e]["out"]:
+                if len(p) < self.flow_logic[e]["out"][o]["con"]:
+                    #print(f"Warning: p list ({len(p)}) is shorter than the number of connections ({self.flow_logic[e]['out'][o]['con']}). Adjusting...")
+                    p += [0] * (self.flow_logic[e]["out"][o]["con"] - len(p))  # Adjust the length of p
                 self.flow_logic[e]["out"][o]["pro"] = sum([p.pop() for _ in range(self.flow_logic[e]["out"][o]["con"])])
                 self.flow_logic[e]["out"][o]["lam"] = self.flow_logic[e]["lam"] * self.flow_logic[e]["out"][o]["pro"]
+                #print(f"self.flow_logic[e]['out'][o]['pro'] : {self.flow_logic[e]['out'][o]['pro']}")
+                #print(f"self.flow_logic[e]['out'][o]['lam'] : {self.flow_logic[e]['out'][o]['lam']}")
 
                 fo = [(fi.pop(), random.choice(self.flow_logic[e]["out"][o]["rou"]), False)
-                      for _ in range(min([round(self.flow_logic[e]["veh"] * self.flow_logic[e]["out"][o]["pro"]), len(fi)]))]
+                    for _ in range(min([round(self.flow_logic[e]["veh"] * self.flow_logic[e]["out"][o]["pro"]), len(fi)]))]
+                #print(f"flow_logic[e][out][o][rou] : {self.flow_logic[e]['out'][o]['rou']}")
                 self.flow_logic[e]["out"][o]["veh"] = len(fo)
+                #print(f"Edge {e}, Out {o}: lambda = {self.flow_logic[e]['out'][o]['lam']}, pro = {self.flow_logic[e]['out'][o]['pro']}, veh = {self.flow_logic[e]['out'][o]['veh']}, len(fo) = {len(fo)}")
+
+                #print(f"len(fo) : {len(fo)}")
 
                 self.flow += fo
 
             self.flow_logic[e]["veh"] = sum([self.flow_logic[e]["out"][o]["veh"] for o in self.flow_logic[e]["out"]])
+            #print(f"Generated flow[e][veh]: {self.flow_logic[e]['veh']}")
 
         v = sum([self.flow_logic[e]["veh"] for e in self.flow_logic])
-        for e in self.flow_logic:
-            self.flow_logic[e]["pro"] = self.flow_logic[e]["veh"] / v
+        if v == 0:
+            print("Warning: Total vehicle count is zero. Setting proportions to zero.")
+            for e in self.flow_logic:
+                self.flow_logic[e]["pro"] = 0  # or some other default value
+        else:
+            for e in self.flow_logic:
+                self.flow_logic[e]["pro"] = self.flow_logic[e]["veh"] / v
 
         for n in random.sample(list(range(v)), round(v * self.con_p_rate)):
             self.flow[n] = self.flow[n][:-1] + (True,)
 
         self.flow = sorted(self.flow)
+        #print(f"Generated flow: {self.flow}")  # Debug statement
+
 
     def generate_route_file(self, gen=True):
         with open(self.data_dir + self.config + ".rou.xml", "w") as f:
@@ -526,7 +569,7 @@ class SumoEnv:
             for rou in self.route_net:
                 print(f'    <route id="{rou}" edges="{" ".join(self.route_net[rou])}" />', file=f)
             print('', file=f)
-
+## Part to generate vehicles 
             if gen:
                 self.veh_n = 0
                 self.ep_count += 1
@@ -538,6 +581,8 @@ class SumoEnv:
                 print('', file=f)
 
             print('</routes>', file=f)
+            #print(f'Generated {self.veh_n} vehicles for episode {self.ep_count}')
+
 
     ####################################################################################################################
     ####################################################################################################################
