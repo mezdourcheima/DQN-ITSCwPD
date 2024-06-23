@@ -11,15 +11,18 @@ import os
 import numpy as np
 from itertools import permutations
 import itertools
-
+from sumolib import net  # noqa
+import traci  # noqa
 
 SUMO_HOME = "/opt/homebrew/"
 
 
+
+if SUMO_HOME is None:
+    raise EnvironmentError("Please declare the environment variable 'SUMO_HOME'")
+
 sys.path.append(SUMO_HOME + 'tools')
 
-from sumolib import net  # noqa
-import traci  # noqa
 
 
 class SumoEnv:
@@ -143,20 +146,69 @@ class SumoEnv:
         traci.simulationStep()
 
     def reset(self):
+        self.simulation_reset()  # Reset the simulation
+        self.veh_n = 0
+        self.flow = []
+        self.con_p_rate = 1.0
+        self.ctrl_con_p_rate = 1.0
+        self.veh_n_p_hour = []
+        self.ep_count += 1
+        self.start()  # Start the simulation
+        return self.obs()  # Return the initial observation
+
+    def step(self, action):
+        for tl_id, phase in zip(self.tl_ids, action):
+            self.set_phase(tl_id, phase)  # Set the phase of each traffic light based on the action
+        self.simulation_step()  # Advance the simulation
+        observation = self.obs()  # Get the new observation
+        reward = self.rew()  # Calculate the reward
+        done = self.done()  # Check if the episode is finished
+        info = self.info()  # Additional info for logging/debugging
+        return observation, reward, done, info
+
+    def obs(self):
+        observation = {
+            "traffic_density": [self.get_lane_veh_n(lane_id) / self.get_lane_length(lane_id) for lane_id in self.get_all_incoming_lanes()],
+            "queue_lengths": [self.get_lane_veh_n(lane_id) for lane_id in self.get_all_incoming_lanes()],
+            "flow_rates": [self.get_edge_veh_ids(edge_id) for edge_id in self.get_all_incoming_edges()],
+            "average_speeds": [self.get_veh_speed(veh_id) for tl_id in self.tl_ids for veh_id in self.yield_tl_vehs(tl_id)],
+            "red_durations": [self.get_phase_duration(tl_id) for tl_id in self.tl_ids]
+        }
+        return observation
+
+    def rew(self):
+        total_travel_time = sum([self.get_veh_accumulated_waiting_time(veh_id) for tl_id in self.tl_ids for veh_id in self.yield_tl_vehs(tl_id)])
+        total_queue_length = sum([self.get_lane_veh_n(lane_id) for lane_id in self.get_all_incoming_lanes()])
+        #total_throughput = sum([len(self.get_edge_veh_ids(edge_id)) for edge_id in self.get_all_outgoing_edges()])
+        
+        sudden_changes_penalty = 0
+        for tl_id in self.tl_ids:
+            previous_phase_duration = self.get_phase_duration(tl_id)
+            new_phase_duration = self.get_phase_duration(tl_id)
+            #sudden_changes_penalty += abs(new_phase_duration - previous_phase_duration)
+        
+        reward = - (total_travel_time + total_queue_length  + sudden_changes_penalty ) #- total_throughput
+        return reward
+
+    def done(self):
+        return self.is_simulation_end()
+
+
+    """"def reset(self):
         
         raise NotImplementedError
 
-    def step(self, action):
+    def step(self, action): #action
         raise NotImplementedError
 
-    def obs(self):
+    def obs(self): #observations
         raise NotImplementedError
 
-    def rew(self):
+    def rew(self):# reward
         raise NotImplementedError
 
     def done(self):
-        raise NotImplementedError
+        raise NotImplementedError"""
 
     def info(self):
         return {} if not self.log else self.log_info()
@@ -621,14 +673,51 @@ class SumoEnv:
             "ep": self.ep_count,
             "con_p_rate": self.con_p_rate,
             "ctrl_con_p_rate": self.ctrl_con_p_rate,
-            "veh_n_p_hour": json.dumps(self.veh_n_p_hour),
-            "veh_n": veh_n,
-            "sum_delay": sum_delay,
-            "sum_waiting_time": sum_waiting_time,
-            "sum_acc_waiting_time": sum_acc_waiting_time,
-            "sum_queue_length": sum_queue_length,
-            "avg_delay": avg_delay,
-            "avg_waiting_time": avg_waiting_time,
-            "avg_acc_waiting_time": avg_acc_waiting_time,
-            "avg_queue_length": avg_queue_length
+            "veh_n_p_hour": json.dumps(self.veh_n_p_hour), #traffic flow rates
+            "veh_n": veh_n, #total number of vehicles currently in the simulation
+            "sum_delay": sum_delay, # Dealy : the difference between the expected travel time (at maximum speed) and the actual travel time
+            "sum_waiting_time": sum_waiting_time, #The total waiting time for all vehicles. Waiting time refers to the time a vehicle spends stationary or moving very slowly, typically due to traffic congestion or traffic signals.
+            "sum_acc_waiting_time": sum_acc_waiting_time, #The accumulated waiting time for all vehicles. This is the sum of waiting times over a longer period, providing a cumulative measure of vehicle delays.
+            "sum_queue_length": sum_queue_length, #The total number of vehicles in queues at traffic lights.
+            "avg_delay": avg_delay, #The average delay per vehicle. This is calculated as sum_delay / veh_n
+            "avg_waiting_time": avg_waiting_time, #The average waiting time per vehicle. This is calculated as sum_waiting_time / veh_n
+            "avg_acc_waiting_time": avg_acc_waiting_time, #The average accumulated waiting time per vehicle. This is calculated as sum_acc_waiting_time / veh_n
+            "avg_queue_length": avg_queue_length #The average queue length per lane. This is calculated as sum_queue_length / len(self.get_all_incoming_lanes())
         }
+
+
+
+    ####################################################################################################################
+    ####################################################################################################################
+
+    # Flow rate and density calculation methods
+
+    def get_flow_rate(self, edge_id, interval=60):
+        """
+        Calculate the flow rate for a specific edge over a given interval (in seconds).
+        Flow rate is the number of vehicles passing a point per unit time.
+        """
+        veh_ids = traci.edge.getLastStepVehicleIDs(edge_id)
+        flow_rate = len(veh_ids) / interval  # vehicles per second
+        return flow_rate
+
+    def get_density(self, edge_id):
+        """
+        Calculate the density for a specific edge.
+        Density is the number of vehicles per unit length of the edge.
+        """
+        veh_ids = traci.edge.getLastStepVehicleIDs(edge_id)
+        edge_length = traci.edge.getLength(edge_id)
+        density = len(veh_ids) / edge_length  # vehicles per meter
+        return density
+    
+
+    """1 - get_flow_rate: Calculates the flow rate for a specific edge over a given interval (default is 60 seconds). It uses the number of vehicles on the edge divided by the time interval to get vehicles per second.
+        
+        2 - get_density: Calculates the density for a specific edge. It uses the number of vehicles on the edge divided by the edge length to get vehicles per meter."""
+    
+
+    def get_ramp_lanes(self):
+        # This should return a list of lane IDs that correspond to ramps.
+        # For example:
+        return [lane.getID() for lane in self.net.getEdges() if 'ramp' in lane.getID()]

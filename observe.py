@@ -90,5 +90,7 @@ if __name__ == "__main__":
     parser.add_argument('-log', type=str2bool, default=False, help='Log csv to ./logs/test/')
     parser.add_argument('-log_s', type=int, default=0, help='Log step if > 0, else episode')
     parser.add_argument('-log_dir', type=str, default="./logs/test/", help='Log directory')
+    parser.add_argument('-port', type=int, default=8813, help='SUMO port number')  # Add this line
+
 
     Observe(parser.parse_args()).run()

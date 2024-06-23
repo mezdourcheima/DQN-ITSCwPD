@@ -84,12 +84,17 @@ class Train:
         print("Start Training")
 
         obses = self.env.reset()
+        print(f"observations:{obses}")
         for step in itertools.count(start=self.agent.resume_step):
             self.agent.step = step
 
             actions = self.agent.choose_actions(obses)
 
             new_obses, rews, dones, infos = self.env.step(actions)
+            print(f"rewards:{rews}")
+            print(f"dones:{dones}")
+            print(f"Infos:{infos}")
+
 
             self.agent.store_transitions(obses, actions, rews, dones, new_obses, infos)
 

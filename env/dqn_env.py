@@ -2,7 +2,7 @@
 from .custom_env import SUMO_PARAMS, Baselines, RLController 
 ########################################################################################################################
 class DqnEnv:
-
+    
     def min_max_scale(self, x, feature):
         return (x - self.min_max[feature][0]) / (self.min_max[feature][1] - self.min_max[feature][0])
 
