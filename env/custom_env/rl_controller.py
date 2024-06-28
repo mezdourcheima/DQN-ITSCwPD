@@ -8,7 +8,7 @@ class RLController(SumoEnv):
     def __init__(self, *args, **kwargs):
         super(RLController, self).__init__(*args, **kwargs)
 
-        self.tg = 10
+        self.tg = 10 #represent the durations for green, yellow, and red traffic light phases
         self.ty = 3
         self.tr = 2
 
@@ -19,8 +19,8 @@ class RLController(SumoEnv):
 
         self.scheduler, self.next_tl_id = None, None
 
-        self.action_space_n = len(self.tl_logic[self.tl_ids[0]]["act"])
-        self.observation_space_n = self.dtse_shape
+        self.action_space_n = len(self.tl_logic[self.tl_ids[0]]["act"]) #The number of possible actions (traffic light states) for a traffic light.
+        self.observation_space_n = self.dtse_shape   # The dimensions of the state representation
 
     def reset(self):
         self.simulation_reset()
@@ -173,7 +173,7 @@ class RLController(SumoEnv):
     def get_n_cells(self):
         return self.args["con_range"] // self.args["cell_length"]
 
-    def get_dtse_shape(self):
+    def get_dtse_shape(self):   #shape of the actions space
         return (
             3,
             len(self.get_tl_incoming_lanes(self.tl_ids[0])),

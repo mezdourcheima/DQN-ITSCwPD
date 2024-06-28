@@ -145,7 +145,7 @@ class SumoEnv:
     def simulation_step(self):
         traci.simulationStep()
 
-    def reset(self):
+    """def reset(self):
         self.simulation_reset()  # Reset the simulation
         self.veh_n = 0
         self.flow = []
@@ -167,10 +167,13 @@ class SumoEnv:
         return observation, reward, done, info
 
     def obs(self):
+        ramp_lanes = self.get_ramp_lanes()
+        print(ramp_lanes)
+
         observation = {
-            "traffic_density": [self.get_lane_veh_n(lane_id) / self.get_lane_length(lane_id) for lane_id in self.get_all_incoming_lanes()],
-            "queue_lengths": [self.get_lane_veh_n(lane_id) for lane_id in self.get_all_incoming_lanes()],
-            "flow_rates": [self.get_edge_veh_ids(edge_id) for edge_id in self.get_all_incoming_edges()],
+            "traffic_density": [self.get_density(lane_id) / self.get_lane_length(lane_id) for lane_id in self.get_all_incoming_lanes()],
+            "queue_lengths": [self.get_lane_veh_n(lane_id) for lane_id in ramp_lanes],            
+            "flow_rates": [self.get_flow_rate(edge_id) for edge_id in self.get_all_incoming_edges()],
             "average_speeds": [self.get_veh_speed(veh_id) for tl_id in self.tl_ids for veh_id in self.yield_tl_vehs(tl_id)],
             "red_durations": [self.get_phase_duration(tl_id) for tl_id in self.tl_ids]
         }
@@ -191,10 +194,10 @@ class SumoEnv:
         return reward
 
     def done(self):
-        return self.is_simulation_end()
+        return self.is_simulation_end()"""
 
 
-    """"def reset(self):
+    def reset(self):
         
         raise NotImplementedError
 
@@ -208,7 +211,7 @@ class SumoEnv:
         raise NotImplementedError
 
     def done(self):
-        raise NotImplementedError"""
+        raise NotImplementedError
 
     def info(self):
         return {} if not self.log else self.log_info()
@@ -439,7 +442,7 @@ class SumoEnv:
 
     def is_valid_connection(self, on, dn):
         # Use all the edges from the network
-        valid_edges = ['E0', 'E6', 'E7', 'E8', 'E9', 'E10', 'E11', 'E12', 'E13', 'E14', 'E15', 'E16', 'E17']
+        valid_edges = ['E0', 'E6', 'E7', 'E8', 'E9', 'E10', 'E11', 'ramp12', 'E13', 'ramp14', 'E15', 'ramp16', 'E17']
         return any(edge.getID() in valid_edges for edge in self.net.getNode(on).getOutgoing())
 
     def gen_route_net(self):
@@ -690,26 +693,37 @@ class SumoEnv:
     ####################################################################################################################
     ####################################################################################################################
 
-    # Flow rate and density calculation methods
-
-    def get_flow_rate(self, edge_id, interval=60):
-        """
-        Calculate the flow rate for a specific edge over a given interval (in seconds).
-        Flow rate is the number of vehicles passing a point per unit time.
-        """
-        veh_ids = traci.edge.getLastStepVehicleIDs(edge_id)
-        flow_rate = len(veh_ids) / interval  # vehicles per second
-        return flow_rate
-
-    def get_density(self, edge_id):
-        """
-        Calculate the density for a specific edge.
-        Density is the number of vehicles per unit length of the edge.
-        """
-        veh_ids = traci.edge.getLastStepVehicleIDs(edge_id)
-        edge_length = traci.edge.getLength(edge_id)
-        density = len(veh_ids) / edge_length  # vehicles per meter
+    def get_density_after_ramp(self):
+        lane_ids = traci.edge.getLaneIDs(self.edge_after_ramp)
+        total_vehicles = 0
+        total_length = 0
+        for lane_id in lane_ids:
+            total_vehicles += traci.lane.getLastStepVehicleNumber(lane_id)
+            total_length += traci.lane.getLength(lane_id)
+        density = total_vehicles / total_length if total_length > 0 else 0
         return density
+
+    def get_flow_after_ramp(self):
+        lane_ids = traci.edge.getLaneIDs(self.edge_after_ramp)
+        total_flow = 0
+        for lane_id in lane_ids:
+            total_flow += traci.lane.getLastStepVehicleIDs(lane_id)
+        return total_flow
+
+    def get_ramp_queue_length(self, tl_id):
+        ramp_lane_ids = self.get_ramp_lane_ids(tl_id)
+        queue_length = 0
+        for lane_id in ramp_lane_ids:
+            veh_ids = traci.lane.getLastStepVehicleIDs(lane_id)
+            for veh_id in veh_ids:
+                if traci.vehicle.getSpeed(veh_id) < 0.1:  # Assuming vehicles with speed < 0.1 are queuing
+                    queue_length += 1
+        return queue_length
+
+    def get_ramp_lane_ids(self, tl_id):
+        # This method should return the list of lane IDs associated with the ramp
+        # Implement this based on your specific network configuration
+        pass
     
 
     """1 - get_flow_rate: Calculates the flow rate for a specific edge over a given interval (default is 60 seconds). It uses the number of vehicles on the edge divided by the time interval to get vehicles per second.
@@ -717,7 +731,21 @@ class SumoEnv:
         2 - get_density: Calculates the density for a specific edge. It uses the number of vehicles on the edge divided by the edge length to get vehicles per meter."""
     
 
-    def get_ramp_lanes(self):
+    def get_ramp_lanes_ids(self):
         # This should return a list of lane IDs that correspond to ramps.
         # For example:
         return [lane.getID() for lane in self.net.getEdges() if 'ramp' in lane.getID()]
+    
+
+    def get_ramp_queue_length(self):
+        # Implement logic to get the queue length on the ramp
+        ramp_lane_ids = self.get_ramp_lanes_ids()
+        queue_length = 0
+        for lane_id in ramp_lane_ids:
+            veh_ids = traci.lane.getLastStepVehicleIDs(lane_id)
+            for veh_id in veh_ids:
+                if traci.vehicle.getSpeed(veh_id) < 0.1:  # Assuming vehicles with speed < 0.1 are queuing
+                    queue_length += 1
+        return queue_length
+
+
