@@ -85,32 +85,31 @@ class RLController(SumoEnv):
         tl_id = self.next_tl_id
         sum_delay_sq = self.get_sum_delay_sq(tl_id)
         self.sum_delay_sq_min = min([self.sum_delay_sq_min, -sum_delay_sq])
-        base_reward = 0 if self.sum_delay_sq_min == 0 else 1 + sum_delay_sq / self.sum_delay_sq_min
+        base_rew = 0 if self.sum_delay_sq_min == 0 else 1 + sum_delay_sq / self.sum_delay_sq_min
 
         # Penalization based on density and flow thresholds
         density_after_ramp = self.get_density(self.edge_after_ramp)
         flow_after_ramp = self.get_flow(self.edge_after_ramp)
         queue_length = self.get_ramp_queue_length()
 
-        density_penalty = max(0, density_after_ramp - self.density_threshold)
-        flow_penalty = max(0, flow_after_ramp - self.flow_threshold)
-        queue_penalty = max(0, queue_length - self.max_queue_length)
+        penalty = 0
+        if density_after_ramp > self.density_threshold:
+            penalty += (density_after_ramp - self.density_threshold)
 
-        # Normalize penalties
-        density_penalty = density_penalty / self.density_threshold
-        flow_penalty = flow_penalty / self.flow_threshold
-        queue_penalty = queue_penalty / self.max_queue_length
+        if flow_after_ramp > self.flow_threshold:
+            penalty += (flow_after_ramp - self.flow_threshold)
 
-        # Adjusted reward calculation
-        reward = base_reward - (density_penalty + flow_penalty + queue_penalty)
+        if queue_length > self.max_queue_length:
+            penalty += (queue_length - self.max_queue_length)
 
-        # Clip reward to ensure it is within a reasonable range
-        reward = max(0, min(1, reward))
+        total_rew = base_rew - penalty
+        total_rew = max(0, total_rew)  # Ensure the reward is non-negative
 
         # Log reward details
-        print(f"Reward: {reward}, Base Reward: {base_reward}, Density Penalty: {density_penalty}, Flow Penalty: {flow_penalty}, Queue Penalty: {queue_penalty}")
-        
-        return reward
+        print(f"Reward: {total_rew}, Base Reward: {base_rew}, Penalty: {penalty}, Density: {density_after_ramp}, Flow: {flow_after_ramp}, Queue: {queue_length}")
+
+        return total_rew
+
 
     def done(self):
         is_done = self.is_simulation_end() or self.get_current_time() >= self.args["steps"]
