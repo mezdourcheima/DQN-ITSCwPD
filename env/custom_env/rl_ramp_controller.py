@@ -1,6 +1,6 @@
 from .tl_scheduler import TlScheduler
 from .sumo_env import SumoEnv
-import random
+import traci
 
 class RLController(SumoEnv):
     def __init__(self, *args, **kwargs):
@@ -15,6 +15,7 @@ class RLController(SumoEnv):
         self.scheduler, self.next_tl_id = None, None
 
         self.ramp_meter_ids = ['ramp12', 'ramp14', 'ramp16']  # Example ramp meter IDs
+        self.edge_after_ramp = 'E6'  # Example edge ID just after the ramp
         self.action_space_n = 3  # Example: 0 = low rate, 1 = medium rate, 2 = high rate
         self.observation_space_n = self.dtse_shape  # Shape of the state representation
 
@@ -22,6 +23,14 @@ class RLController(SumoEnv):
         self.density_threshold = 0.8
         self.flow_threshold = 0.8
         self.max_queue_length = 100
+
+        # Da dictionary mapping tl_id to ramp lane IDs
+        self.ramp_lane_mapping = {
+            'ramp12': ['ramp12_0'],  # lane IDs for ramp12
+            'ramp14': ['ramp14_0'],  #  lane IDs for ramp14
+            'ramp16': ['ramp16_0']   #  lane IDs for ramp16
+        }
+
 
     def reset(self):
         self.simulation_reset()
@@ -51,7 +60,14 @@ class RLController(SumoEnv):
             
     def obs(self):
         tl_id = self.next_tl_id
-        return self.get_dtse(tl_id)
+
+        density = self.get_density_after_ramp(self.edge_after_ramp)
+        flow = self.get_flow_after_ramp(self.edge_after_ramp)
+        queue_length = self.get_ramp_queue_length(tl_id)
+        speed = self.get_average_speed(self.edge_after_ramp)
+
+        obs = [density, flow, queue_length, speed]
+        return obs
 
     def rew(self):
         tl_id = self.next_tl_id
@@ -60,8 +76,8 @@ class RLController(SumoEnv):
         rew = 0 if self.sum_delay_sq_min == 0 else 1 + sum_delay_sq / self.sum_delay_sq_min
 
         # Penalization based on density and flow thresholds
-        density_after_ramp = self.get_density_after_ramp(tl_id)
-        flow_after_ramp = self.get_flow_after_ramp(tl_id)
+        density_after_ramp = self.get_density_after_ramp(self.edge_after_ramp)
+        flow_after_ramp = self.get_flow_after_ramp(self.edge_after_ramp)
         queue_length = self.get_ramp_queue_length(tl_id)
 
         if density_after_ramp > self.density_threshold:
@@ -77,6 +93,12 @@ class RLController(SumoEnv):
 
     def done(self):
         return self.is_simulation_end() or self.get_current_time() >= self.args["steps"]
+
+# Connected vehicles
+
+    def get_veh_delay_sq(self, veh_id):
+        return 1 - pow((self.get_veh_speed(veh_id) / self.args["v_max_speed"]), 2)
+
 
     def get_sum_delay_sq(self, tl_id):
         sum_delay = 0
@@ -100,15 +122,50 @@ class RLController(SumoEnv):
         return dtse
 
     def get_density_after_ramp(self, edge_id):
-        # Implement logic to get the traffic density just after the ramp
-        return  SumoEnv.get_density(edge_id)
-        
+        lane_ids = traci.edge.getLaneIDs(edge_id)
+        total_vehicles = 0
+        total_length = 0
+        for lane_id in lane_ids:
+            total_vehicles += traci.lane.getLastStepVehicleNumber(lane_id)
+            total_length += traci.lane.getLength(lane_id)
+        density = total_vehicles / total_length if total_length > 0 else 0
+        return density
     
     def get_flow_after_ramp(self, edge_id):
-        # Implement logic to get the traffic flow just after the ramp
-        return  SumoEnv.get_density(edge_id)
-        
-    
-    def get_ramp_queue_length(self, ramp_id):
-        # Implement logic to get the queue length on the ramp
-        pass
+        lane_ids = traci.edge.getLaneIDs(edge_id)
+        total_flow = 0
+        for lane_id in lane_ids:
+            total_flow += traci.lane.getLastStepVehicleNumber(lane_id)  # Number of vehicles in the last step
+        return total_flow
+
+    def get_ramp_queue_length(self, tl_id):
+        ramp_lane_ids = self.get_ramp_lane_ids(tl_id)
+        queue_length = 0
+        for lane_id in ramp_lane_ids:
+            veh_ids = traci.lane.getLastStepVehicleIDs(lane_id)
+            for veh_id in veh_ids:
+                if traci.vehicle.getSpeed(veh_id) < 0.1:  # Assuming vehicles with speed < 0.1 are queuing
+                    queue_length += 1
+        return queue_length
+
+    def get_ramp_lane_ids(self, tl_id):
+        """
+        This method returns the list of lane IDs associated with the given ramp traffic light ID (tl_id).
+        """
+        if tl_id in self.ramp_lane_mapping:
+            return self.ramp_lane_mapping[tl_id]
+        else:
+            raise ValueError(f"Invalid traffic light ID: {tl_id}")
+
+
+    def get_average_speed(self, edge_id):
+        lane_ids = traci.edge.getLaneIDs(edge_id)
+        total_speed = 0
+        total_vehicles = 0
+        for lane_id in lane_ids:
+            veh_ids = traci.lane.getLastStepVehicleIDs(lane_id)
+            for veh_id in veh_ids:
+                total_speed += traci.vehicle.getSpeed(veh_id)
+                total_vehicles += 1
+        avg_speed = total_speed / total_vehicles if total_vehicles > 0 else 0
+        return avg_speed

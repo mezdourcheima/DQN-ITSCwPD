@@ -58,7 +58,10 @@
     <edge id=":J11_1" function="internal">
         <lane id=":J11_1_0" index="0" speed="13.89" length="8.15" shape="281.61,57.09 289.76,57.09"/>
         <lane id=":J11_1_1" index="1" speed="13.89" length="8.15" shape="281.61,60.29 289.76,60.29"/>
-        <lane id=":J11_1_2" index="2" speed="13.89" length="8.15" shape="281.61,63.49 289.76,63.49"/>
+       def get_ramp_lane_ids(self, tl_id):
+        # This method should return the list of lane IDs associated with the ramp
+        # Implement this based on your specific network configuration
+        pass  <lane id=":J11_1_2" index="2" speed="13.89" length="8.15" shape="281.61,63.49 289.76,63.49"/>
     </edge>
     <edge id=":J7_0" function="internal">
         <lane id=":J7_0_0" index="0" speed="7.32" length="7.71" shape="34.86,57.09 36.54,56.81 38.05,55.95 39.39,54.52 40.56,52.53"/>
