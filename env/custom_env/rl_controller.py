@@ -25,7 +25,7 @@ class RLController(SumoEnv):
         # Define thresholds
         self.density_threshold = 0.8
         self.flow_threshold = 0.8
-        self.max_queue_length = 100
+        self.max_queue_length = 7 #7 vehicles max in the ramp
 
         # Define the ramp_lane_mapping with the specified ramps
         self.ramp_lane_mapping = {
@@ -107,8 +107,10 @@ class RLController(SumoEnv):
 
         # Log reward details
         print(f"Reward: {total_rew}, Base Reward: {base_rew}, Penalty: {penalty}, Density: {density_after_ramp}, Flow: {flow_after_ramp}, Queue: {queue_length}")
+        print(f"Sum Delay Squared: {sum_delay_sq}, Sum Delay Squared Min: {self.sum_delay_sq_min}")
 
         return total_rew
+
 
 
     def done(self):
@@ -136,33 +138,31 @@ class RLController(SumoEnv):
 
     def get_dtse_shape(self):  # shape of the actions space
         return (
-            3,
+            4,  # 4 observations
             len(self.get_tl_incoming_lanes(self.tl_ids[0])),
-            self.get_n_cells()
+            20  # fixed number of cells
         )
 
     def get_dtse(self, tl_id):
-        # Print dtse_shape for debugging
-        # print(f"dtse_shape: {self.dtse_shape}")
-
-        # Ensure dtse_shape has at least 3 dimensions
         if len(self.dtse_shape) < 3:
             raise ValueError("dtse_shape must have at least three dimensions")
 
-        # Create the dtse array with the given shape
         dtse = [[[0. for _ in range(self.dtse_shape[2])] for _ in range(self.dtse_shape[1])] for _ in range(self.dtse_shape[0])]
 
-        # Iterate over the required range and fill the dtse array
-        for l in range(len(dtse[2])):
-            if l >= self.dtse_shape[1]:
-                raise IndexError(f"Index 'l' ({l}) is out of range for dtse_shape[1] ({self.dtse_shape[1]})")
-            dtse[2][l] = [1. for _ in range(self.dtse_shape[2])]
+        lanes = self.get_tl_incoming_lanes(tl_id)
+        for idx, lane in enumerate(lanes):
+            density = self.get_density(lane) # It should be in the edge(all lanes not only one lane)
+            flow = self.get_flow(lane)
+            queue_length = self.get_ramp_queue_length()  # fixed this call
+            speed = self.get_average_speed(lane)
+            dtse[0][idx] = [density] * self.dtse_shape[2]  # Fill the cell dimension with the same value
+            dtse[1][idx] = [flow] * self.dtse_shape[2]  # Fill the cell dimension with the same value
+            dtse[2][idx] = [queue_length] * self.dtse_shape[2]  # Fill the cell dimension with the same value
+            dtse[3][idx] = [speed] * self.dtse_shape[2]  # Fill the cell dimension with the same value
 
-        # Return the constructed dtse array
         return dtse
 
     def print_dtse(self, dtse):
-        """"""
         print(self.dtse_shape)
         [([print(h) for h in c], print("")) for c in dtse]
 
