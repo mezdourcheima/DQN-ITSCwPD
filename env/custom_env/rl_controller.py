@@ -12,7 +12,7 @@ class RLController(SumoEnv):
         self.ty = 3
         self.tr = 2
 
-        self.edge_after_ramp = 'E6'  # Example edge ID just after the ramp
+        #self.edge_after_ramp = 'E6'  # Example edge ID just after the ramp
 
         self.dtse_shape = self.get_dtse_shape()
         self.sum_delay_sq_min = 0
@@ -23,9 +23,14 @@ class RLController(SumoEnv):
         self.observation_space_n = self.dtse_shape  # The dimensions of the state representation
 
         # Define thresholds
-        self.density_threshold = 0.8
-        self.flow_threshold = 0.8
+        self.density_threshold = 0.18
+        self.flow_threshold = 2.67
         self.max_queue_length = 7 #7 vehicles max in the ramp
+
+        ###############
+        # Initialize these attributes
+        self.sum_delay_min = float('inf')
+        self.sum_waiting_time_min = float('inf')
 
         # Define the ramp_lane_mapping with the specified ramps
         self.ramp_lane_mapping = {
@@ -82,34 +87,59 @@ class RLController(SumoEnv):
         return obs
 
     def rew(self):
+        total_rew = 0
         tl_id = self.next_tl_id
-        sum_delay_sq = self.get_sum_delay_sq(tl_id)
-        self.sum_delay_sq_min = min([self.sum_delay_sq_min, -sum_delay_sq])
-        base_rew = 0 if self.sum_delay_sq_min == 0 else 1 + sum_delay_sq / self.sum_delay_sq_min
 
-        # Penalization based on density and flow thresholds
-        density_after_ramp = self.get_density(self.edge_after_ramp)
-        flow_after_ramp = self.get_flow(self.edge_after_ramp)
-        queue_length = self.get_ramp_queue_length()
+        # Get the delay and waiting time metrics
+        sum_delay, sum_waiting_time = self.get_sum_delay_a_sum_waiting_time(tl_id)
 
-        penalty = 0
-        if density_after_ramp > self.density_threshold:
-            penalty += (density_after_ramp - self.density_threshold)
+        self.sum_delay_min = min(self.sum_delay_min, -sum_delay)
+        self.sum_waiting_time_min = min(self.sum_waiting_time_min, -sum_waiting_time)
 
-        if flow_after_ramp > self.flow_threshold:
-            penalty += (flow_after_ramp - self.flow_threshold)
+        rew_delay = 0 if self.sum_delay_min == 0 else 1 + sum_delay / self.sum_delay_min
+        rew_waiting_time = 0 if self.sum_waiting_time_min == 0 else 1 + sum_waiting_time / self.sum_waiting_time_min
 
-        if queue_length > self.max_queue_length:
-            penalty += (queue_length - self.max_queue_length)
+        # Weighting factors for delay and waiting time rewards
+        w1, w2 = 0.5, 0.5
 
-        total_rew = base_rew - penalty
+        rew = w1 * rew_delay + w2 * rew_waiting_time
+
+        for ramp_edge, connected_edges in self.edges_after_ramps.items():
+            for edge in connected_edges:
+                density = self.get_density(edge)
+                flow = self.get_flow(edge)
+                queue_length = self.get_ramp_queue_length()
+
+                penalty = 0
+                if density > self.density_threshold:
+                    penalty += (density - self.density_threshold)
+                    print(f"Penalty for density: {density - self.density_threshold} (Density: {density}, Threshold: {self.density_threshold})")
+                else:
+                    total_rew += 10
+
+                if flow > self.flow_threshold:
+                    penalty += (flow - self.flow_threshold)
+                    print(f"Penalty for flow: {flow - self.flow_threshold} (Flow: {flow}, Threshold: {self.flow_threshold})")
+                else:
+                    total_rew += 10
+
+                if queue_length > self.max_queue_length:
+                    penalty += (queue_length - self.max_queue_length)
+                    print(f"Penalty for queue length: {queue_length - self.max_queue_length} (Queue Length: {queue_length}, Max: {self.max_queue_length})")
+                else:
+                    total_rew += 10
+
+                total_rew += -penalty
+                print(f"Intermediate total reward after edge {edge}: {total_rew}")
+
         total_rew = max(0, total_rew)  # Ensure the reward is non-negative
 
-        # Log reward details
-        print(f"Reward: {total_rew}, Base Reward: {base_rew}, Penalty: {penalty}, Density: {density_after_ramp}, Flow: {flow_after_ramp}, Queue: {queue_length}")
-        print(f"Sum Delay Squared: {sum_delay_sq}, Sum Delay Squared Min: {self.sum_delay_sq_min}")
+        # Incorporate delay and waiting time rewards
+        final_rew = SumoEnv.clip(0, 1, rew) + total_rew
 
-        return total_rew
+        print(f"Final total reward: {final_rew}")
+        return final_rew
+
 
 
 
@@ -151,14 +181,15 @@ class RLController(SumoEnv):
 
         lanes = self.get_tl_incoming_lanes(tl_id)
         for idx, lane in enumerate(lanes):
-            density = self.get_density(lane) # It should be in the edge(all lanes not only one lane)
-            flow = self.get_flow(lane)
-            queue_length = self.get_ramp_queue_length()  # fixed this call
-            speed = self.get_average_speed(lane)
-            dtse[0][idx] = [density] * self.dtse_shape[2]  # Fill the cell dimension with the same value
-            dtse[1][idx] = [flow] * self.dtse_shape[2]  # Fill the cell dimension with the same value
-            dtse[2][idx] = [queue_length] * self.dtse_shape[2]  # Fill the cell dimension with the same value
-            dtse[3][idx] = [speed] * self.dtse_shape[2]  # Fill the cell dimension with the same value
+            edge_id = self.get_lane_edge_id(lane)
+            density = self.get_density(edge_id)
+            flow = self.get_flow(edge_id)
+            queue_length = self.get_ramp_queue_length()
+            speed = self.get_average_speed(edge_id)
+            dtse[0][idx] = [density] * self.dtse_shape[2]
+            dtse[1][idx] = [flow] * self.dtse_shape[2]
+            dtse[2][idx] = [queue_length] * self.dtse_shape[2]
+            dtse[3][idx] = [speed] * self.dtse_shape[2]
 
         return dtse
 
@@ -167,44 +198,58 @@ class RLController(SumoEnv):
         [([print(h) for h in c], print("")) for c in dtse]
 
     def get_lane_ids_for_edge(self, edge_id):
-        num_lanes = traci.edge.getLaneNumber(edge_id)
-        lane_ids = [f"{edge_id}_{i}" for i in range(num_lanes)]
-        return lane_ids
+        try:
+            num_lanes = traci.edge.getLaneNumber(edge_id)
+            lane_ids = [f"{edge_id}_{i}" for i in range(num_lanes)]
+            return lane_ids
+        except traci.exceptions.TraCIException as e:
+            print(f"Error: Edge '{edge_id}' is not known. Exception: {e}")
+            return []
+
 
     def get_density(self, edge_id):
         try:
             lane_ids = self.get_lane_ids_for_edge(edge_id)
-            print(f"Edge {edge_id} lane IDs: {lane_ids}")
-        except traci.exceptions.TraCIException:
-            print(f"Error: Edge '{edge_id}' is not known")
-            return 0
+            if not lane_ids:
+                print(f"No lanes found for edge: {edge_id}")
+                return 0
 
-        total_vehicles = 0
-        total_length = 0
-        for lane_id in lane_ids:
-            try:
-                total_vehicles += traci.lane.getLastStepVehicleNumber(lane_id)
-                total_length += traci.lane.getLength(lane_id)
-            except traci.exceptions.TraCIException:
-                print(f"Warning: Lane '{lane_id}' is not known")
-        density = total_vehicles / total_length if total_length > 0 else 0
-        return density
+            total_vehicles = 0
+            total_length = 0
+            for lane_id in lane_ids:
+                try:
+                    total_vehicles += traci.lane.getLastStepVehicleNumber(lane_id)
+                    total_length += traci.lane.getLength(lane_id)
+                except traci.exceptions.TraCIException:
+                    print(f"Warning: Lane '{lane_id}' is not known")
+                    continue
+
+            density = total_vehicles / total_length if total_length > 0 else 0
+            print(f"Density for edge {edge_id}: {density} (Total Vehicles: {total_vehicles}, Total Length: {total_length})")
+            return density
+        except Exception as e:
+            print(f"Error getting density for edge {edge_id}: {e}")
+            return 0
 
     def get_flow(self, edge_id):
         try:
             lane_ids = self.get_lane_ids_for_edge(edge_id)
-            print(f"Edge {edge_id} lane IDs: {lane_ids}")
-        except traci.exceptions.TraCIException:
-            print(f"Error: Edge '{edge_id}' is not known")
+            if not lane_ids:
+                print(f"No lanes found for edge: {edge_id}")
+                return 0
+
+            total_flow = 0
+            for lane_id in lane_ids:
+                try:
+                    total_flow += traci.lane.getLastStepVehicleNumber(lane_id)  # Number of vehicles in the last step
+                except traci.exceptions.TraCIException:
+                    print(f"Warning: Lane '{lane_id}' is not known")
+            return total_flow
+        except Exception as e:
+            print(f"Error getting flow for edge {edge_id}: {e}")
             return 0
 
-        total_flow = 0
-        for lane_id in lane_ids:
-            try:
-                total_flow += traci.lane.getLastStepVehicleNumber(lane_id)  # Number of vehicles in the last step
-            except traci.exceptions.TraCIException:
-                print(f"Warning: Lane '{lane_id}' is not known")
-        return total_flow
+
 
     def get_ramp_queue_length(self):
         queue_length = 0
@@ -222,20 +267,59 @@ class RLController(SumoEnv):
     def get_average_speed(self, edge_id):
         try:
             lane_ids = self.get_lane_ids_for_edge(edge_id)
-            print(f"Edge {edge_id} lane IDs: {lane_ids}")
-        except traci.exceptions.TraCIException:
-            print(f"Error: Edge '{edge_id}' is not known")
+            if not lane_ids:
+                print(f"No lanes found for edge: {edge_id}")
+                return 0
+
+            total_speed = 0
+            total_vehicles = 0
+            for lane_id in lane_ids:
+                try:
+                    veh_ids = traci.lane.getLastStepVehicleIDs(lane_id)
+                    for veh_id in veh_ids:
+                        total_speed += traci.vehicle.getSpeed(veh_id)
+                        total_vehicles += 1
+                except traci.exceptions.TraCIException:
+                    print(f"Warning: Lane '{lane_id}' is not known")
+            avg_speed = total_speed / total_vehicles if total_vehicles > 0 else 0
+            return avg_speed
+        except Exception as e:
+            print(f"Error getting average speed for edge {edge_id}: {e}")
             return 0
 
-        total_speed = 0
-        total_vehicles = 0
-        for lane_id in lane_ids:
-            try:
-                veh_ids = traci.lane.getLastStepVehicleIDs(lane_id)
-                for veh_id in veh_ids:
-                    total_speed += traci.vehicle.getSpeed(veh_id)
-                    total_vehicles += 1
-            except traci.exceptions.TraCIException:
-                print(f"Warning: Lane '{lane_id}' is not known")
-        avg_speed = total_speed / total_vehicles if total_vehicles > 0 else 0
-        return avg_speed
+
+        
+    def get_veh_delay(self, veh_id):
+        return 1 - (self.get_veh_speed(veh_id) / self.args["v_max_speed"])
+    
+
+    
+    def get_sum_delay(self, tl_id):
+        sum_delay = 0
+
+        for veh_id in self.yield_tl_vehs(tl_id):
+            sum_delay += self.get_veh_delay(veh_id)
+
+        return sum_delay
+    
+
+    
+    def get_sum_waiting_time(self, tl_id):
+        sum_waiting_time = 0
+
+        for veh_id in self.yield_tl_vehs(tl_id):
+            sum_waiting_time += self.get_veh_waiting_time(veh_id)
+
+        return sum_waiting_time
+    
+
+    
+    def get_sum_delay_a_sum_waiting_time(self, tl_id):
+        sum_delay, sum_waiting_time = 0, 0
+
+        for veh_id in self.yield_tl_vehs(tl_id):
+            sum_delay += self.get_veh_delay(veh_id)
+            sum_waiting_time += self.get_veh_waiting_time(veh_id)
+
+        return sum_delay, sum_waiting_time
+    

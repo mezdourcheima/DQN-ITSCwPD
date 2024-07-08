@@ -97,6 +97,8 @@ class SumoEnv:
         self.con_p_rate = 1.
         self.ctrl_con_p_rate = 1.
         self.veh_n_p_hour = []
+        self.ramp_edges = self.find_ramp_edges()
+        self.edges_after_ramps = self.find_edges_after_ramps()
 
         """
         self.update_flow_logic()
@@ -695,6 +697,21 @@ class SumoEnv:
     ####################################################################################################################
 
 
+# Ramp methods
+    def find_ramp_edges(self):
+        """Find all edges that are ramps."""
+        ramp_edges = []
+        for edge in self.net.getEdges():
+            if 'ramp' in edge.getID():
+                ramp_edges.append(edge.getID())
+        return ramp_edges
 
+    def find_edges_after_ramps(self):
+        """Find all edges connected to ramp edges."""
+        edges_after_ramps = {}
+        for ramp_edge in self.ramp_edges:
+            connections = self.net.getEdge(ramp_edge).getOutgoing()
+            edges_after_ramps[ramp_edge] = [conn.getID() for conn in connections]
+        return edges_after_ramps
 
   
