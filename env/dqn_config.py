@@ -9,7 +9,7 @@ CONFIG = SUMO_PARAMS["config"]
 
 # """CHANGE HYPER PARAMETERS HERE""" ###################################################################################
 HYPER_PARAMS = {
-    'gpu': '0',                                 # GPU #
+    'gpu': '1',                                 # GPU #
     'n_env': 1,                                 # Multi-processing environments
     'lr': 1e-04,                                # Learning rate
     'gamma': 0.99,                              # Discount factor

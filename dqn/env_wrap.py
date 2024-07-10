@@ -103,6 +103,7 @@ class CustomEnvWrapper(gym.Env):
 
             if done:
                 file_exists = os.path.isfile(log_path + ".csv")
+                print("hellloooo I'll be saving csv nooow")
 
                 with open(log_path + ".csv", 'a') as f:
                     csv_writer = DictWriter(f, delimiter=',', lineterminator='\n', fieldnames=[k for k in info])

@@ -16,7 +16,7 @@ class BaselineMeta(SumoEnv):
         raise NotImplementedError
 
     def obs(self):
-        return []
+        return [] 
 
     def rew(self):
         return 0

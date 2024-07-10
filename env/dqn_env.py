@@ -31,6 +31,12 @@ class DqnEnv:
         self.action_space_n = self.sumo_env.action_space_n
         self.observation_space_n = self.sumo_env.observation_space_n
         ################################################################################################################
+        self.ramp_edges = self.find_ramp_edges()
+        self.edges_after_ramps = self.find_edges_after_ramps()
+        ################################################################################################################
+
+
+
 
     def obs(self):
         # """CHANGE OBSERVATION HERE""" ################################################################################
@@ -54,7 +60,8 @@ class DqnEnv:
 
     def info(self):
         # """CHANGE INFO HERE""" #######################################################################################
-        info = self.sumo_env.info()
+        info = self.sumo_env.log_info()
+        #info = self.sumo_env.info() ['l', 'r']
         ################################################################################################################
         return info
 
@@ -77,3 +84,13 @@ class DqnEnv:
         # """CHANGE STEP RENDER HERE""" ################################################################################
         pass
         ################################################################################################################
+
+    def log_info(self):
+        # """CHANGE log_info HERE""" #######################################################################################
+        self.sumo_env.log_info()
+    
+    def find_ramp_edges(self):
+        return self.sumo_env.find_ramp_edges()
+
+    def find_edges_after_ramps(self):
+        return self.sumo_env.find_edges_after_ramps()

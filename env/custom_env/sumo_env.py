@@ -656,40 +656,59 @@ class SumoEnv:
     # Log info
 
     def log_info(self):
-        veh_n = 0
-        sum_delay, sum_waiting_time, sum_queue_length, sum_acc_waiting_time = 0, 0, 0, 0
+            veh_n = 0
+            sum_delay, sum_waiting_time, sum_queue_length, sum_acc_waiting_time = 0, 0, 0, 0
 
-        for tl_id in self.tl_ids:
-            for veh_id in self.yield_tl_vehs(tl_id):
-                veh_n += 1
-                sum_delay += self.get_veh_delay(veh_id)
-                wt = self.get_veh_waiting_time(veh_id)
-                sum_waiting_time += wt
-                sum_acc_waiting_time += self.get_veh_accumulated_waiting_time(veh_id)
-                if wt > 0:
-                    sum_queue_length += 1
+            for tl_id in self.tl_ids:
+                for veh_id in self.yield_tl_vehs(tl_id):
+                    veh_n += 1
+                    sum_delay += self.get_veh_delay(veh_id)
+                    wt = self.get_veh_waiting_time(veh_id)
+                    sum_waiting_time += wt
+                    sum_acc_waiting_time += self.get_veh_accumulated_waiting_time(veh_id)
+                    if wt > 0:
+                        sum_queue_length += 1
 
-        avg_delay = 0 if veh_n == 0 else sum_delay / veh_n
-        avg_waiting_time = 0 if veh_n == 0 else sum_waiting_time / veh_n
-        avg_acc_waiting_time = 0 if veh_n == 0 else sum_acc_waiting_time / veh_n
-        avg_queue_length = sum_queue_length / len(self.get_all_incoming_lanes())
+            avg_delay = 0 if veh_n == 0 else sum_delay / veh_n
+            avg_waiting_time = 0 if veh_n == 0 else sum_waiting_time / veh_n
+            avg_acc_waiting_time = 0 if veh_n == 0 else sum_acc_waiting_time / veh_n
+            avg_queue_length = sum_queue_length / len(self.get_all_incoming_lanes())
 
-        return {
-            "id": type(self).__name__.lower(),
-            "ep": self.ep_count,
-            "con_p_rate": self.con_p_rate,
-            "ctrl_con_p_rate": self.ctrl_con_p_rate,
-            "veh_n_p_hour": json.dumps(self.veh_n_p_hour), #traffic flow rates
-            "veh_n": veh_n, #total number of vehicles currently in the simulation
-            "sum_delay": sum_delay, # Dealy : the difference between the expected travel time (at maximum speed) and the actual travel time
-            "sum_waiting_time": sum_waiting_time, #The total waiting time for all vehicles. Waiting time refers to the time a vehicle spends stationary or moving very slowly, typically due to traffic congestion or traffic signals.
-            "sum_acc_waiting_time": sum_acc_waiting_time, #The accumulated waiting time for all vehicles. This is the sum of waiting times over a longer period, providing a cumulative measure of vehicle delays.
-            "sum_queue_length": sum_queue_length, #The total number of vehicles in queues at traffic lights.
-            "avg_delay": avg_delay, #The average delay per vehicle. This is calculated as sum_delay / veh_n
-            "avg_waiting_time": avg_waiting_time, #The average waiting time per vehicle. This is calculated as sum_waiting_time / veh_n
-            "avg_acc_waiting_time": avg_acc_waiting_time, #The average accumulated waiting time per vehicle. This is calculated as sum_acc_waiting_time / veh_n
-            "avg_queue_length": avg_queue_length #The average queue length per lane. This is calculated as sum_queue_length / len(self.get_all_incoming_lanes())
-        }
+            # Calculate density, flow, and queue length for each ramp edge
+            densities = {ramp_edge: self.get_density(ramp_edge) for ramp_edge in self.ramp_edges}
+            flows = {ramp_edge: self.get_flow(ramp_edge) for ramp_edge in self.ramp_edges}
+            ramp_queue_lengths = {ramp_edge: self.get_ramp_queue_length() for ramp_edge in self.ramp_edges}
+
+            # Calculate total density, flow, and queue length
+            total_density = sum(densities.values())
+            total_flow = sum(flows.values())
+            total_ramp_queue_length = sum(ramp_queue_lengths.values())
+
+            return  {
+                "id": type(self).__name__.lower(),
+                "ep": self.ep_count,
+                "con_p_rate": self.con_p_rate,
+                "ctrl_con_p_rate": self.ctrl_con_p_rate,
+                "veh_n_p_hour": json.dumps(self.veh_n_p_hour),  # traffic flow rates
+                "veh_n": veh_n,  # total number of vehicles currently in the simulation
+                "sum_delay": sum_delay,  # Delay: the difference between the expected travel time (at maximum speed) and the actual travel time
+                "sum_waiting_time": sum_waiting_time,  # The total waiting time for all vehicles. Waiting time refers to the time a vehicle spends stationary or moving very slowly, typically due to traffic congestion or traffic signals.
+                "sum_acc_waiting_time": sum_acc_waiting_time,  # The accumulated waiting time for all vehicles. This is the sum of waiting times over a longer period, providing a cumulative measure of vehicle delays.
+                "sum_queue_length": sum_queue_length,  # The total number of vehicles in queues at traffic lights.
+                "avg_delay": avg_delay,  # The average delay per vehicle. This is calculated as sum_delay / veh_n
+                "avg_waiting_time": avg_waiting_time,  # The average waiting time per vehicle. This is calculated as sum_waiting_time / veh_n
+                "avg_acc_waiting_time": avg_acc_waiting_time,  # The average accumulated waiting time per vehicle. This is calculated as sum_acc_waiting_time / veh_n
+                "avg_queue_length": avg_queue_length,  # The average queue length per lane. This is calculated as sum_queue_length / len(self.get_all_incoming_lanes())
+                "densities": densities,
+                "flows": flows,
+                "ramp_queue_lengths": ramp_queue_lengths,
+                "total_density": total_density,  # Total density across all ramp edges
+                "total_flow": total_flow,  # Total flow across all ramp edges
+                "total_ramp_queue_length": total_ramp_queue_length  # Total queue length across all ramp edges
+            }
+
+
+
 
 
 

@@ -64,6 +64,7 @@ class Observe(View):
         self.repeat += 1
 
         self.obs, _, done, info = self.env.step(self.action)
+        print(f"infos : {info}")
         self.env.log_info_writer(info, done, *self.log)
 
         if done:
@@ -87,9 +88,9 @@ if __name__ == "__main__":
     parser.add_argument('-gpu', type=str, default='0', help='GPU #')
     parser.add_argument('-max_s', type=int, default=0, help='Max steps per episode if > 0, else inf')
     parser.add_argument('-max_e', type=int, default=0, help='Max episodes if > 0, else inf')
-    parser.add_argument('-log', type=str2bool, default=False, help='Log csv to ./logs/test/')
+    parser.add_argument('-log', type=str2bool, default=False, help='Log csv to ./logs/test/data/')
     parser.add_argument('-log_s', type=int, default=0, help='Log step if > 0, else episode')
-    parser.add_argument('-log_dir', type=str, default="./logs/test/", help='Log directory')
+    parser.add_argument('-log_dir', type=str, default="./logs/test/data/", help='Log directory')
 
 
     Observe(parser.parse_args()).run()
