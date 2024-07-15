@@ -530,7 +530,7 @@ class SumoEnv:
         return 3600 / veh_p_h
 
     def insert_lambdas(self):
-        lambdas = [self.lambda_veh_p_hour(random.randint(1, 10) * 100) for _ in self.flow_logic]
+        lambdas = [self.lambda_veh_p_hour(random.randint(5, 15) * 100) for _ in self.flow_logic]
         return lambdas if self.rnd[1] else [self.lambda_veh_p_hour(f) for f in self.args["veh_p_hour"]]
 
     def update_flow_logic(self):
@@ -617,29 +617,30 @@ class SumoEnv:
             print('', file=f)
 
             print(f'    <vType id="{self.args["v_type_def"]}" accel="0.8" decel="4.5" sigma="0.5"' +
-                  f' length="{self.args["v_length"]}" minGap="{self.args["v_min_gap"]}"' +
-                  f' maxSpeed="{self.args["v_max_speed"]}" guiShape="passenger" />', file=f)
+                f' length="{self.args["v_length"]}" minGap="{self.args["v_min_gap"]}"' +
+                f' maxSpeed="{self.args["v_max_speed"]}" guiShape="passenger" />', file=f)
             print(f'    <vType id="{self.args["v_type_con"]}" accel="0.8" decel="4.5" sigma="0.5"' +
-                  f' length="{self.args["v_length"]}" minGap="{self.args["v_min_gap"]}"' +
-                  f' maxSpeed="{self.args["v_max_speed"]}" guiShape="passenger" />', file=f)
+                f' length="{self.args["v_length"]}" minGap="{self.args["v_min_gap"]}"' +
+                f' maxSpeed="{self.args["v_max_speed"]}" guiShape="passenger" />', file=f)
             print('', file=f)
 
             for rou in self.route_net:
                 print(f'    <route id="{rou}" edges="{" ".join(self.route_net[rou])}" />', file=f)
             print('', file=f)
-## Part to generate vehicles 
+
             if gen:
                 self.veh_n = 0
                 self.ep_count += 1
                 self.update_flow_logic()
+
                 for t, rou, co in self.flow:
                     self.veh_n += 1
                     v_type = self.args["v_type_con"] if co else self.args["v_type_def"]
-                    print(f'    <vehicle id="{rou}_{self.veh_n}" type="{v_type}" route="{rou}" depart="{t}" />', file=f)
+                    for lane in range(len(self.net.getEdge(self.route_net[rou][0]).getLanes())):  # Iterate over all lanes
+                        print(f'    <vehicle id="{rou}_{self.veh_n}_{lane}" type="{v_type}" route="{rou}" depart="{t}" departLane="{lane}" />', file=f)
                 print('', file=f)
 
             print('</routes>', file=f)
-            #print(f'Generated {self.veh_n} vehicles for episode {self.ep_count}')
 
 
     ####################################################################################################################
@@ -733,4 +734,8 @@ class SumoEnv:
             edges_after_ramps[ramp_edge] = [conn.getID() for conn in connections]
         return edges_after_ramps
 
-  
+
+    #####################################################
+    #get_collisions 
+    #def get_collisions(self):
+    #    return traci.simulation.getCollidingVehiclesNumber()

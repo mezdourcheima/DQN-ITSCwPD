@@ -202,6 +202,7 @@ class DoubleAgent(Agent):
 
     def learn(self):
         # Compute loss
+        print("I'm learning yupiiiii")
         transitions = self.replay_memory_buffer.sample_transitions()
         obses_t, actions_t, rews_t, dones_t, new_obses_t = self.transitions_to_tensor(transitions)
 

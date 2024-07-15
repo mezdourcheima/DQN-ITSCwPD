@@ -1,6 +1,7 @@
 from .tl_scheduler import TlScheduler
 from .sumo_env import SumoEnv
 
+
 import traci
 import random
 
@@ -8,9 +9,14 @@ class RLController(SumoEnv):
     def __init__(self, *args, **kwargs):
         super(RLController, self).__init__(*args, **kwargs)
 
+
         self.tg = 10  # represent the durations for green, yellow, and red traffic light phases
         self.ty = 3
         self.tr = 2
+
+        # Initialize the collision counter
+        self.collision_count = 0
+        self.collision_vehicles = set()
 
         #self.edge_after_ramp = 'E6'  # Example edge ID just after the ramp
 
@@ -42,6 +48,9 @@ class RLController(SumoEnv):
     def reset(self):
         self.simulation_reset()
 
+        self.collision_count = 0
+        self.collision_vehicles.clear()
+
         self.scheduler = TlScheduler(self.tg + self.ty + self.tr, self.tl_ids)
         self.next_tl_id = self.scheduler.pop()[0]
 
@@ -49,6 +58,7 @@ class RLController(SumoEnv):
             self.simulation_step()
 
     def step(self, action):
+        print("I'm inside the step function")
         tl_id = self.next_tl_id
 
         if self.tl_logic[tl_id]["act"][action] == self.get_ryg_state(tl_id):
@@ -70,6 +80,23 @@ class RLController(SumoEnv):
 
             if tl_evt is None:
                 self.simulation_step()
+                # Log current vehicles in the simulation
+                current_vehicles = traci.vehicle.getIDList()
+                print(f"Current vehicles in the simulation: {current_vehicles}")
+
+                # Check for collisions
+                collision_vehicles = traci.simulation.getCollidingVehiclesIDList()
+                if collision_vehicles:
+                    self.collision_vehicles.update(collision_vehicles)
+                    self.collision_count += len(collision_vehicles)
+                    print(f"Collision detected! Vehicles involved: {collision_vehicles}")
+                    for vehicle_id in collision_vehicles:
+                        try:
+                            position = traci.vehicle.getPosition(vehicle_id)
+                            print(f"Collision detected for vehicle {vehicle_id} at position {position}")
+                        except traci.exceptions.TraCIException:
+                            print(f"Vehicle {vehicle_id} involved in collision but is not known to the simulation")
+            
             else:
                 tl_id, new_p = tl_evt
 
@@ -134,11 +161,21 @@ class RLController(SumoEnv):
 
         total_rew = max(0, total_rew)  # Ensure the reward is non-negative
 
+
+        # Penalize collisions
+        collision_penalty = -50 * self.collision_count  # Example penalty per collision
+        total_rew += collision_penalty
+        if self.collision_count:
+            print(f"Collision penalty: {collision_penalty} (Total Collisions: {self.collision_count})")
+
         # Incorporate delay and waiting time rewards
         final_rew = SumoEnv.clip(0, 1, rew) + total_rew
 
+        
+
         print(f"Final total reward: {final_rew}")
         return final_rew
+
 
 
 

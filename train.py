@@ -5,6 +5,7 @@ import os
 import time
 import argparse
 import itertools
+#import torch 
 
 from datetime import timedelta
 
@@ -117,6 +118,10 @@ class Train:
 
         self.train_loop()
 
+    """def run(self):
+            with tf.device('/GPU:0'):
+                self.init_replay_memory_buffer()
+                self.train_loop()"""
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="TRAIN")
