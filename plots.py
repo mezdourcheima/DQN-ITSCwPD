@@ -3,7 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # Load the CSV file
-file_path = '/Users/cheimamezdour/Projects/PFE/DQN-ITSCwPD/logs/test/data/1tls_1x3.csv'
+file_path = '/Users/cheimamezdour/Projects/PFE/DQN-ITSCwPD/logs/test/data/1tls_3x3.csv'
 data = pd.read_csv(file_path)
 
 # Ensure the output directory exists

@@ -1,6 +1,7 @@
 from .utils import ABCMeta, abstract_attribute
 from .replay_memory import ReplayMemoryNaive, ReplayMemoryPrioritized
 from .network import DeepQNetwork, DuelingDeepQNetwork
+from .alinea_agent import ALINEA_Agent
 
 import os
 import time
@@ -318,3 +319,41 @@ class PerDuelingDoubleDQNAgent(PerDoubleAgent):
         self.target_network = DuelingDeepQNetwork(self.device, self.lr, self.nn_conf_func, self.input_dim, self.output_dim, reduction='none')
 
         self.update_target_network(force=True)
+
+
+class AlineaAgent(Agent):
+    def __init__(self, *args, **kwargs):
+        super(AlineaAgent, self).__init__(*args, **kwargs)
+        self.alinea_agent = ALINEA_Agent(K=0.1, q_target=30.0)
+        self.replay_memory_buffer = ReplayMemoryNaive(self.buffer_size, self.batch_size)
+        self.online_network = DeepQNetwork(self.device, self.lr, self.nn_conf_func, self.input_dim, self.output_dim)
+        self.target_network = DeepQNetwork(self.device, self.lr, self.nn_conf_func, self.input_dim, self.output_dim)
+        self.update_target_network(force=True)
+
+    def choose_actions(self, obses):
+        actions = self.online_network.actions(obses)
+        return actions
+
+    def learn(self):
+        transitions = self.replay_memory_buffer.sample_transitions()
+        obses_t, actions_t, rews_t, dones_t, new_obses_t = self.transitions_to_tensor(transitions)
+
+        with T.no_grad():
+            target_q_values = self.target_network(new_obses_t)
+            max_target_q_values = target_q_values.max(dim=1, keepdim=True)[0]
+            targets = rews_t + (1 - dones_t) * self.gamma * max_target_q_values
+
+        online_q_values = self.online_network(obses_t)
+        action_q_values = T.gather(input=online_q_values, dim=1, index=actions_t)
+
+        loss = self.online_network.loss(action_q_values, targets).to(self.device)
+        self.online_network.optimizer.zero_grad()
+        loss.backward()
+        self.online_network.optimizer.step()
+
+    def update_alinea_rate(self, q_current):
+        new_rate = self.alinea_agent.update_rate(q_current)
+        # Apply new_rate to your environment or model
+        return new_rate
+
+
