@@ -6,7 +6,8 @@ from torch import no_grad, as_tensor
 from gym.spaces import Box
 
 CONFIG = SUMO_PARAMS["config"]
-
+#Config for metanet model
+#CONFIG = "J7_TLS/metanet"
 # """CHANGE HYPER PARAMETERS HERE""" ###################################################################################
 HYPER_PARAMS = {
     'gpu': '1',                                 # GPU #

@@ -357,3 +357,9 @@ class AlineaAgent(Agent):
         return new_rate
 
 
+"""This architecture combines deep Q-learning with a traditional control algorithm (ALINEA). 
+The deep Q-network handles the decision-making by learning from the environment, while the 
+ALINEA algorithm possibly regulates some environmental parameter, integrating a classical 
+control approach with modern reinforcement learning. The agent leverages experience replay 
+and target networks to stabilize learning, which is a standard technique in deep Q-learning 
+to mitigate the instability of Q-value updates."""
