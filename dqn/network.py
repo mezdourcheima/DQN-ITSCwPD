@@ -52,6 +52,8 @@ class DeepQNetwork(Network):
         super(DeepQNetwork, self).__init__(device, nn_conf_func, input_dim)
 
         self.fc_out = nn.Linear(self.fc_out_dim, output_dim)
+        print(f"fc_out_dim: {self.fc_out_dim}, type: {type(self.fc_out_dim)}")
+        print(f"output_dim: {output_dim}, type: {type(output_dim)}")
 
         self.optimizer = self.optim_func(self.parameters(), lr=lr)
         self.loss = self.loss_func(reduction=reduction)

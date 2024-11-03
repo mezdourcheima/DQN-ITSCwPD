@@ -10,7 +10,7 @@ CONFIG = SUMO_PARAMS["config"]
 #CONFIG = "J7_TLS/metanet"
 # """CHANGE HYPER PARAMETERS HERE""" ###################################################################################
 HYPER_PARAMS = {
-    'gpu': '1',                                 # GPU #
+    'gpu': '0',                                 # GPU #
     'n_env': 1,                                 # Multi-processing environments
     'lr': 1e-04,                                # Learning rate
     'gamma': 0.99,                              # Discount factor
@@ -32,7 +32,7 @@ HYPER_PARAMS = {
     'repeat': 0,                                # Repeat action
     'max_episode_steps': 1000,                  # Time limit episode steps
     'max_total_steps': 0,                       # Max total training steps if > 0, else inf training
-    'algo': 'AlineaAgent'             # DQNAgent
+    'algo': 'DoubleDQNAgent'             # DQNAgent
                                                 # DoubleDQNAgent
                                                 # DuelingDoubleDQNAgent
                                                 # PerDuelingDoubleDQNAgent

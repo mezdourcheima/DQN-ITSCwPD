@@ -1,37 +1,46 @@
-import os
-import pandas as pd
+import pickle
 import matplotlib.pyplot as plt
 
-# Load the CSV file
-file_path = '/Users/cheimamezdour/Projects/PFE/DQN-ITSCwPD/logs/test/data/1tls_3x3.csv'
-data = pd.read_csv(file_path)
+# Load the data from the pickle file
+with open("training_data.pkl", "rb") as f:
+    data_over_time = pickle.load(f)
 
-# Ensure the output directory exists
-output_dir = '/Users/cheimamezdour/Projects/PFE/DQN-ITSCwPD/logs/test/plots'
-os.makedirs(output_dir, exist_ok=True)
+# Plot the metrics over time
+plt.figure(figsize=(12, 8))
 
-# Function to plot and save the metrics
-def plot_and_save_metrics(data, metrics, xlabel, ylabel, title, output_dir):
-    plt.figure(figsize=(15, 10))
-    for metric in metrics:
-        plt.plot(data['ep'], data[metric], label=metric)
-    plt.xlabel(xlabel)
-    plt.ylabel(ylabel)
-    plt.title(title)
-    plt.legend()
-    plt.grid(True)
-    
-    # Save the figure
-    output_path = os.path.join(output_dir, f'{title}.png')
-    plt.savefig(output_path)
-    plt.close()
+# Plot density
+plt.subplot(2, 2, 1)
+for i in range(len(data_over_time['density'][0])):
+    plt.plot([density[i] for density in data_over_time['density']], label=f'Segment {i+1}')
+plt.title('Density Over Time')
+plt.xlabel('Time Step')
+plt.ylabel('Density (vehicles/km)')
+plt.legend()
 
-# Metrics to plot
-metrics = [
-    'r', 'ctrl_con_p_rate', 'sum_delay', 'sum_waiting_time',
-    'avg_acc_waiting_time', 'avg_queue_length', 'total_density',
-    'total_flow', 'total_ramp_queue_length'
-]
+# Plot flow
+plt.subplot(2, 2, 2)
+for i in range(len(data_over_time['flow'][0])):
+    plt.plot([flow[i] for flow in data_over_time['flow']], label=f'Segment {i+1}')
+plt.title('Flow Over Time')
+plt.xlabel('Time Step')
+plt.ylabel('Flow (vehicles/h)')
+plt.legend()
 
-# Plotting and saving the metrics per episode
-plot_and_save_metrics(data, metrics, xlabel='Episode', ylabel='Value', title='Metrics per Episode', output_dir=output_dir)
+# Plot ramp queue length
+plt.subplot(2, 2, 3)
+for i in range(len(data_over_time['ramp_queue_length'][0])):
+    plt.plot([ramp_queue_length[i] for ramp_queue_length in data_over_time['ramp_queue_length']], label=f'Segment {i+1}')
+plt.title('Ramp Queue Length Over Time')
+plt.xlabel('Time Step')
+plt.ylabel('Queue Length (vehicles)')
+plt.legend()
+
+# Plot reward
+plt.subplot(2, 2, 4)
+plt.plot(data_over_time['reward'])
+plt.title('Reward Over Time')
+plt.xlabel('Time Step')
+plt.ylabel('Reward')
+
+plt.tight_layout()
+plt.show()

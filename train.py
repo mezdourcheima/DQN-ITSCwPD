@@ -1,6 +1,5 @@
-from env import HYPER_PARAMS, network_config, CustomEnv, metanet_env
+from env import HYPER_PARAMS, network_config, CustomEnv
 from dqn import CustomEnvWrapper, make_env, Agents
-from env.metanet_env import MetaNet
 
 import os
 import time
@@ -15,14 +14,8 @@ class Train:
     def __init__(self, args):
         os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
         os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
-
-        if args.traffic_model == 'metanet':
-
-                    metanet_params = {'num_links': 10, 'free_flow_speed': 30}  # Example parameters for MetaNet
-                    env = CustomEnvWrapper(CustomEnv(type(self).__name__.lower()))
-                    env.metanet = MetaNet(params=metanet_params)  # Initialize MetaNet within the environment
-        else:
-                    env = CustomEnvWrapper(CustomEnv(type(self).__name__.lower()))
+       
+        env = CustomEnvWrapper(CustomEnv(type(self).__name__.lower()))
 
         self.env = make_env(
             env=env,
@@ -163,7 +156,6 @@ if __name__ == "__main__":
                              'DuelingDoubleDQNAgent ' +
                              'PerDuelingDoubleDQNAgent'
                         )
-    parser.add_argument('--traffic_model', type=str, default='sumo', choices=['sumo', 'metanet'], help='Traffic model to use')
 
 
     Train(parser.parse_args()).run()

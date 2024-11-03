@@ -93,6 +93,9 @@ class CustomEnvWrapper(gym.Env):
     def render(self, mode='human'):
         pass
 
+    def save_data_to_pickle(self, file_name): 
+        self.custom_env.save_data_to_pickle(file_name)
+
     def log_info_writer(self, info, done, log, log_step, log_path):
         if log and (done or (log_step > 0 and info["l"] % log_step == 0)):
             if "TimeLimit.truncated" not in info:

@@ -48,9 +48,16 @@ class Agent(metaclass=ABCMeta):
         self.save_path = save_dir + path + '_' + 'model.pack'
         self.summary_writer = SummaryWriter(log_dir + path + '/')
 
-        self.device = T.device(("cuda:"+gpu) if T.cuda.is_available() else "cpu")
-        print("DEVICE", "=", self.device, "" if not T.cuda.is_available() else T.cuda.get_device_name(self.device))
-
+        # Device setup: check for CUDA, then MPS, fallback to CPU
+        if T.cuda.is_available():
+            self.device = T.device("cuda:"+gpu)
+            print("DEVICE =", self.device, T.cuda.get_device_name(self.device))
+        elif T.backends.mps.is_available():
+            self.device = T.device("mps")
+            print("DEVICE = MPS (Metal Performance Shaders)")
+        else:
+            self.device = T.device("cpu")
+            print("DEVICE = CPU")
         self.start_time = time.time()
 
     @abstract_attribute

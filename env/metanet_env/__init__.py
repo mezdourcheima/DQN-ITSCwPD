@@ -1,2 +1,2 @@
-from .metanet_env import MetaNet
-__all__ = ["MetaNet"]
+from .MetaNetEnv import MetanetEnv
+__all__ = ["MetanetEnv"]
